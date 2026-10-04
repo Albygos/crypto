@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>New Token Scanner</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;
+ background:#080b10;
+ color:#e8edf4;
+ font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif
+}
+.wrap{max-width:1320px;margin:auto;padding:28px 18px}
+header{
+ display:flex;
+ justify-content:space-between;
+ align-items:flex-end;
+ gap:20px;
+ margin-bottom:20px
+}
+h1{margin:0 0 6px;font-size:28px;letter-spacing:-.3px}
+.subtitle{margin:0;color:#8994a4}
+.status{
+ border:1px solid #26313e;
+ background:#0e141b;
+ border-radius:10px;
+ padding:10px 13px;
+ font-size:13px
+}
+.dot{
+ display:inline-block;
+ width:8px;
+ height:8px;
+ border-radius:50%;
+ background:#38d39f;
+ margin-right:7px
+}
+.toolbar{
+ display:flex;
+ gap:10px;
+ flex-wrap:wrap;
+ margin-bottom:14px
+}
+input,button,select{
+ border:1px solid #293442;
+ background:#0e141b;
+ color:#fff;
+ border-radius:9px;
+ padding:11px 13px;
+ font:inherit
+}
+input{min-width:260px;outline:none}
+select{min-width:150px;outline:none}
+button{cursor:pointer}
+.card{
+ border:1px solid #202a36;
+ border-radius:13px;
+ overflow:auto;
+ background:#0b1016
+}
+table{
+ width:100%;
+ min-width:1000px;
+ border-collapse:collapse
+}
+th,td{
+ padding:13px 12px;
+ text-align:left;
+ border-bottom:1px solid #1c2530;
+ font-size:13px;
+ white-space:nowrap
+}
+th{
+ background:#0e141b;
+ color:#8d98a9;
+ font-weight:600;
+ position:sticky;
+ top:0
+}
+.name{font-weight:650}
+.symbol{color:#7e8999;margin-left:6px}
+.mint{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#9ca8b7}
+a{color:#70a9ff;text-decoration:none}
+a:hover{text-decoration:underline}
+.fun{color:#63dfa9}
+.com{color:#6ea8ff}
+.other{color:#b2a0ff}
+.age{color:#a8b2c0}
+.empty{text-align:center;padding:48px;color:#778395}
+.badge{
+ display:inline-block;
+ border:1px solid #2a3542;
+ border-radius:999px;
+ padding:3px 7px;
+ font-size:11px;
+ color:#aeb8c6
+}
+@media(max-width:700px){
+ header{flex-direction:column;align-items:flex-start}
+ input{width:100%}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+ <div>
+  <h1>New Token Scanner</h1>
+  <p class="subtitle">Pump.fun launches • Past 24 hours • Newest first</p>
+ </div>
+
+ <div class="status">
+  <span class="dot"></span>
+  <span id="status">Connecting…</span>
+ </div>
+</header>
+
+<div class="toolbar">
+ <input id="search" placeholder="Search name, symbol or mint…">
+
+ <select id="domain">
+  <option value="all">All Websites</option>
+  <option value=".fun">.fun</option>
+  <option value=".com">.com</option>
+ </select>
+
+ <button id="refresh">Refresh</button>
+</div>
+
+<div class="card">
+<table>
+<thead>
+<tr>
+ <th>Token</th>
+ <th>Mint Address</th>
+ <th>Website</th>
+ <th>Market Cap</th>
+ <th>Volume 24h</th>
+ <th>Created</th>
+ <th>Age</th>
+ <th>Pump.fun</th>
+</tr>
+</thead>
+<tbody id="body">
+<tr><td colspan="8" class="empty">Waiting for new tokens…</td></tr>
+</tbody>
+</table>
+</div>
+
+</div>
+
+<script>
+let allTokens=[];
+
+const body=document.getElementById("body");
+const search=document.getElementById("search");
+const domain=document.getElementById("domain");
+const status=document.getElementById("status");
+
+function esc(value){
+ return String(value ?? "").replace(/[&<>"']/g,char=>({
+  "&":"&amp;",
+  "<":"&lt;",
+  ">":"&gt;",
+  '"':"&quot;",
+  "'":"&#039;"
+ }[char]));
+}
+
+function shortMint(value){
+ if(!value) return "—";
+ return value.slice(0,7)+"…"+value.slice(-6);
+}
+
+function money(value){
+ return new Intl.NumberFormat("en-US",{
+  notation:"compact",
+  maximumFractionDigits:2
+ }).format(Number(value)||0);
+}
+
+function age(ts){
+ if(!ts) return "—";
+
+ let seconds=Math.max(
+  0,
+  Math.floor(Date.now()/1000-Number(ts))
+ );
+
+ if(seconds<60) return seconds+"s";
+ if(seconds<3600) return Math.floor(seconds/60)+"m";
+ if(seconds<86400) return Math.floor(seconds/3600)+"h";
+
+ return Math.floor(seconds/86400)+"d";
+}
+
+function createdText(ts){
+ if(!ts) return "—";
+
+ return new Date(Number(ts)*1000).toLocaleString(
+  undefined,
+  {
+   year:"numeric",
+   month:"short",
+   day:"2-digit",
+   hour:"2-digit",
+   minute:"2-digit",
+   second:"2-digit"
+  }
+ );
+}
+
+function render(){
+ const q=search.value.trim().toLowerCase();
+ const selected=domain.value;
+ const cutoff=Date.now()/1000-86400;
+
+ const rows=allTokens
+  .filter(token=>Number(token.created_ts)>=cutoff)
+  .filter(token=>{
+   if(selected==="all") return true;
+   return token.domain===selected;
+  })
+  .filter(token=>{
+   if(!q) return true;
+
+   return (
+    String(token.name||"").toLowerCase().includes(q) ||
+    String(token.symbol||"").toLowerCase().includes(q) ||
+    String(token.mint||"").toLowerCase().includes(q)
+   );
+  })
+  .sort((a,b)=>Number(b.created_ts)-Number(a.created_ts));
+
+ if(!rows.length){
+  body.innerHTML=
+   '<tr><td colspan="8" class="empty">No matching tokens in the last 24 hours.</td></tr>';
+  return;
+ }
+
+ body.innerHTML=rows.map(token=>{
+
+  const cls=
+   token.domain===".fun"
+    ?"fun"
+    :token.domain===".com"
+     ?"com"
+     :"other";
+
+  return `
+  <tr>
+   <td>
+    <span class="name">${esc(token.name)}</span>
+    <span class="symbol">$${esc(token.symbol)}</span>
+   </td>
+
+   <td
+    class="mint"
+    title="${esc(token.mint)}"
+   >${esc(shortMint(token.mint))}</td>
+
+   <td>
+    <a
+     class="${cls}"
+     href="${esc(token.website)}"
+     target="_blank"
+     rel="noopener noreferrer"
+    >${esc(token.website)}</a>
+   </td>
+
+   <td>$${money(token.market_cap)}</td>
+
+   <td>$${money(token.volume)}</td>
+
+   <td>${esc(createdText(token.created_ts))}</td>
+
+   <td class="age">${age(token.created_ts)} ago</td>
+
+   <td>
+    <a
+     href="${esc(token.pump_url)}"
+     target="_blank"
+     rel="noopener noreferrer"
+    >Open ↗</a>
+   </td>
+  </tr>`;
+ }).join("");
+}
+
+async function load(){
+ try{
+  const response=await fetch(
+   "/api/tokens",
+   {cache:"no-store"}
+  );
+
+  if(!response.ok) throw new Error("HTTP "+response.status);
+
+  const data=await response.json();
+
+  allTokens=data.tokens||[];
+
+  render();
+
+  status.textContent=
+   "Live • "+allTokens.length+" tokens";
+ }catch(error){
+  console.error(error);
+  status.textContent="Connection error";
+ }
+}
+
+search.addEventListener("input",render);
+domain.addEventListener("change",render);
+document.getElementById("refresh").addEventListener("click",load);
+
+load();
+
+setInterval(load,3000);
+setInterval(render,1000);
+</script>
+
+</body>
+</html>
