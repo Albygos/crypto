@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pump.fun New Token Scanner</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#080b10;color:#e8edf4;font-family:Inter,system-ui,sans-serif}.wrap{max-width:1250px;margin:auto;padding:28px 18px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-bottom:20px}h1{margin:0 0 6px;font-size:28px}p{margin:0;color:#8b96a6}.status{background:#0e141b;border:1px solid #26313f;border-radius:10px;padding:10px 13px;font-size:13px}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#38d39f;margin-right:7px}
+.controls{display:flex;gap:10px;margin-bottom:14px}input,button{background:#0e141b;border:1px solid #293442;color:#fff;border-radius:9px;padding:11px 13px}input{min-width:260px;outline:0}button{cursor:pointer}
+.card{border:1px solid #202a36;border-radius:13px;overflow:auto;background:#0b1016}.table{border-collapse:collapse;width:100%;min-width:920px}th,td{padding:13px 12px;text-align:left;border-bottom:1px solid #1c2530;font-size:13px}th{background:#0e141b;color:#8e99aa;position:sticky;top:0}.name{font-weight:650}.symbol{color:#7f8a9b;margin-left:6px}.mint{font-family:monospace;color:#9ca8b7}a{color:#6ea8ff;text-decoration:none}.fun{color:#64dfa9}.empty{text-align:center;padding:45px;color:#788496}
+@media(max-width:700px){header{align-items:flex-start;flex-direction:column}}
+</style></head><body><div class="wrap">
+<header><div><h1>New Token Website Scanner</h1><p>Live Pump.fun launches filtered for .fun websites</p></div><div class="status"><span class="dot"></span><span id="status">Connecting…</span></div></header>
+<div class="controls"><input id="search" placeholder="Search token, symbol or mint…"><button onclick="load()">Refresh</button></div>
+<div class="card"><table class="table"><thead><tr><th>Token</th><th>Mint</th><th>Website</th><th>Market Cap</th><th>Volume 24h</th><th>Created</th><th>Pump.fun</th></tr></thead><tbody id="body"><tr><td colspan="7" class="empty">Waiting for new tokens…</td></tr></tbody></table></div>
+</div>
+<script>
+let all=[];
+const esc=x=>String(x??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+const compact=n=>new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:2}).format(Number(n)||0);
+const short=s=>s?s.slice(0,7)+'…'+s.slice(-6):'—';
+function age(ts){if(!ts)return'—';let s=Math.max(0,Date.now()/1000-ts);if(s<60)return Math.floor(s)+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago'}
+function render(){let q=document.getElementById('search').value.toLowerCase();let rows=all.filter(t=>(t.name+' '+t.symbol+' '+t.mint).toLowerCase().includes(q));
+document.getElementById('body').innerHTML=rows.length?rows.map(t=>`<tr><td><span class="name">${esc(t.name)}</span><span class="symbol">$${esc(t.symbol)}</span></td><td class="mint" title="${esc(t.mint)}">${short(esc(t.mint))}</td><td><a class="fun" href="${esc(t.website)}" target="_blank" rel="noopener">${esc(t.website)}</a></td><td>$${compact(t.market_cap)}</td><td>$${compact(t.volume)}</td><td>${age(t.created_ts)}</td><td><a href="${esc(t.pump_url)}" target="_blank" rel="noopener">Open ↗</a></td></tr>`).join(''):'<tr><td colspan="7" class="empty">No matching tokens</td></tr>'}
+async function load(){try{let r=await fetch('/api/tokens',{cache:'no-store'}),d=await r.json();all=d.tokens||[];render();document.getElementById('status').textContent='Live • '+all.length+' matching';}catch(e){document.getElementById('status').textContent='Connection error'}}
+document.getElementById('search').addEventListener('input',render);load();setInterval(load,3000);setInterval(render,1000);
+</script></body></html>
